@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reporting-batch
+  namespace: secure-apps
+  labels:
+    app.kubernetes.io/name: reporting-batch
+    inherited-from: legacy-cluster
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: reporting-batch
+  template:
+    metadata:
+      labels:
+        app: reporting-batch
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: reporting-worker
+        image: python:3.11-alpine
+        command:
+        - python3
+        - -c
+        - |
+          import http.server, socketserver
+          class HealthHandler(http.server.SimpleHTTPRequestHandler):
+              def do_GET(self):
+                  self.send_response(200)
+                  self.end_headers()
+                  self.wfile.write(b'Reporting Batch OK')
+          print("[Reporting-Batch] Listening on port 8080 for health checks...")
+          with socketserver.TCPServer(('', 8080), HealthHandler) as httpd:
+              httpd.serve_forever()
+        ports:
+        - containerPort: 8080
+          name: http
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        # INHERITED DEFECT 1:
+        # Exceeds LimitRange max (cpu: 4 exceeds max of 2, memory: 4Gi exceeds max of 2Gi)
+        resources:
+          requests:
+            cpu: "4"
+            memory: 4Gi
+          limits:
+            cpu: "4"
+            memory: 4Gi
+        # INHERITED DEFECT 2:
+        # Non-obvious probe misconfiguration: probes port 9090 instead of 8080, causing probe failure restart loops!
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 9090
+          initialDelaySeconds: 5
+          periodSeconds: 5

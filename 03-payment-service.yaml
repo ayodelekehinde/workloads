@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  namespace: secure-apps
+  labels:
+    app.kubernetes.io/name: payment-service
+    inherited-from: legacy-cluster
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment-service
+  template:
+    metadata:
+      labels:
+        app: payment-service
+    spec:
+      containers:
+      - name: payment-api
+        image: python:3.11-alpine
+        command:
+        - python3
+        - -c
+        - |
+          import http.server, socketserver
+          class Handler(http.server.SimpleHTTPRequestHandler):
+              def do_GET(self):
+                  self.send_response(200)
+                  self.end_headers()
+                  self.wfile.write(b'Payment Service Ready')
+          with socketserver.TCPServer(('', 8443), Handler) as httpd:
+              httpd.serve_forever()
+        ports:
+        - containerPort: 8443
+          name: https
+        # INHERITED DEFECT:
+        # Explicit root execution inherited from legacy VM-like container builds
+        securityContext:
+          runAsUser: 0
+          allowPrivilegeEscalation: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 300m
+            memory: 256Mi
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8443
+          initialDelaySeconds: 2
+          periodSeconds: 5

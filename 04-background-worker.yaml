@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: background-worker
+  namespace: secure-apps
+  labels:
+    app.kubernetes.io/name: background-worker
+    inherited-from: legacy-cluster
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: background-worker
+  template:
+    metadata:
+      labels:
+        app: background-worker
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: worker
+        image: python:3.11-alpine
+        command:
+        - python3
+        - -c
+        - |
+          import time, os
+          cache_file = "/app/cache/state.lock"
+          print("[Worker] Initializing queue worker...")
+          # Inherited code expects a writable cache/lock directory
+          try:
+              with open(cache_file, "w") as f:
+                  f.write("worker-initialized")
+              print("[Worker] Lock acquired. Processing jobs...")
+              while True:
+                  time.sleep(5)
+                  print("[Worker] Heartbeat OK")
+          except Exception as e:
+              print(f"[FATAL] Failed to write cache state: {e}")
+              exit(1)
+        # NON-OBVIOUS DEFECT:
+        # Passes admission because securityContext is strict,
+        # but readOnlyRootFilesystem breaks the application without an emptyDir volume mount!
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 100m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi

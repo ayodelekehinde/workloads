@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mesh-telemetry-agent
+  namespace: secure-apps
+  labels:
+    app.kubernetes.io/name: mesh-telemetry-agent
+    inherited-from: legacy-cluster
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mesh-telemetry-agent
+  template:
+    metadata:
+      labels:
+        app: mesh-telemetry-agent
+    spec:
+      # DEFECT / ARCHITECTURAL CONSTRAINT:
+      # Requires host network namespace to monitor interface packet rates
+      hostNetwork: true
+      containers:
+      - name: telemetry-agent
+        image: python:3.11-alpine
+        command:
+        - python3
+        - -c
+        - |
+          import time
+          print("[Telemetry-Agent] Capturing host interface packet counters...")
+          while True:
+              time.sleep(5)
+              print("[Telemetry-Agent] Metrics exported.")
+        securityContext:
+          capabilities:
+            add:
+            - NET_ADMIN
+            - NET_RAW
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi

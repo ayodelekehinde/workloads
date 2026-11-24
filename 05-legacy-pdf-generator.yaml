@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: legacy-pdf-generator
+  namespace: secure-apps
+  labels:
+    app.kubernetes.io/name: legacy-pdf-generator
+    inherited-from: legacy-cluster
+    vendor: cots-document-solutions
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: legacy-pdf-generator
+  template:
+    metadata:
+      labels:
+        app: legacy-pdf-generator
+    spec:
+      containers:
+      - name: pdf-engine
+        image: python:3.11-alpine
+        command:
+        - python3
+        - -c
+        - |
+          import os, time, sys
+          print("[COTS-PDF-Engine v4.2] Bootstrapping print spooler and font registry...")
+          if os.geteuid() != 0:
+              print("[FATAL] COTS Driver Exception: Process must run as root (UID 0) to initialize font spooler.")
+              sys.exit(1)
+          print("[COTS-PDF-Engine] Engine running in privileged daemon mode.")
+          while True:
+              time.sleep(5)
+        # DEFECT / ARCHITECTURAL CONSTRAINT:
+        # Hardcoded requirement for root UID 0 from unmodifiable third-party vendor image.
+        # Enforcing runAsNonRoot causes application exit; omitting it violates baseline admission.
+        securityContext:
+          runAsUser: 0
+          allowPrivilegeEscalation: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          exec:
+            command:
+            - python3
+            - -c
+            - "import sys; sys.exit(0)"
+          initialDelaySeconds: 5
+          periodSeconds: 10

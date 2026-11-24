@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cache-cleaner
+  namespace: secure-apps
+  labels:
+    app.kubernetes.io/name: cache-cleaner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cache-cleaner
+  template:
+    metadata:
+      labels:
+        app: cache-cleaner
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: cleaner
+        image: python:3.11-alpine
+        command:
+        - python3
+        - -c
+        - |
+          import time
+          print("[Cache-Cleaner] Service started, running routine memory and session purge...")
+          while True:
+              time.sleep(10)
+              print("[Cache-Cleaner] Evicted 0 stale cache keys.")
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi

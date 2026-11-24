@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-processor
+  namespace: secure-apps
+  labels:
+    app.kubernetes.io/name: order-processor
+    inherited-from: legacy-cluster
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-processor
+  template:
+    metadata:
+      labels:
+        app: order-processor
+    spec:
+      containers:
+      - name: processor
+        image: python:3.11-alpine
+        command:
+        - python3
+        - -c
+        - |
+          import http.server, socketserver
+          class Handler(http.server.SimpleHTTPRequestHandler):
+              def do_GET(self):
+                  self.send_response(200)
+                  self.end_headers()
+                  self.wfile.write(b'Order Processor Active')
+          with socketserver.TCPServer(('', 8080), Handler) as httpd:
+              httpd.serve_forever()
+        ports:
+        - containerPort: 8080
+          name: http
+        # INHERITED DEFECTS:
+        # 1. No securityContext (runs as root, privilege escalation allowed, capabilities not dropped)
+        # 2. No liveness or readiness probes
+        # 3. No explicit resource requests/limits defined
